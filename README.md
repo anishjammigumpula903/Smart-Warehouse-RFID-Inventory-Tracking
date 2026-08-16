@@ -109,3 +109,52 @@ The primary objectives of the project are:
                          │ Stock Alerts         │
                          │ AI Forecast          │
                          └──────────────────────┘
+Backend & API
+Python 3.11+ — Core development language
+FastAPI — High-performance REST API
+Pydantic — Data validation and API schemas
+Uvicorn — ASGI server
+📊 Data Engineering & Processing
+Pandas — RFID event and inventory data processing
+NumPy — Numerical computation and feature engineering
+SQLite — Development/local database
+PostgreSQL — Production database
+SQLAlchemy — Database ORM
+🤖 Machine Learning & AI
+Scikit-learn — Classification, preprocessing, model evaluation
+Statsmodels — ARIMA/time-series forecasting
+XGBoost — Movement/demand classification
+Isolation Forest — Inventory anomaly detection
+📈 Analytics & Visualization
+Matplotlib — Statistical visualization
+Seaborn — Exploratory data analysis
+Plotly — Interactive charts and dashboards
+Jupyter Notebook — EDA, experimentation, and model development
+🌐 Frontend
+HTML5 — Dashboard structure
+CSS3 — SmartWare dashboard interface
+JavaScript (ES6+) — RFID simulation, dashboard interaction, API integration
+Chart.js / Plotly.js — Interactive visualizations
+📡 RFID & Event Simulation
+RFID Event Simulator — Simulated RFID reader/tag events
+JSON — Event/API data format
+REST API — RFID event communication
+MQTT (future hardware integration) — Real-time RFID event streaming
+🗄️ Database
+SQLite — Local development
+PostgreSQL — Production-ready relational database
+SQLAlchemy — Database abstraction and ORM
+🧪 Testing & Code Quality
+Pytest — Unit and integration testing
+Ruff — Python linting
+Black — Code formatting
+🔧 DevOps & Deployment
+Git — Version control
+GitHub — Repository and collaboration
+GitHub Actions — CI/CD and automated testing
+Docker — Containerization
+Uvicorn — Application server
+📚 Development & Documentation
+Jupyter Notebook — ML experimentation
+OpenAPI / Swagger — API documentation
+Markdown — Project documentation
