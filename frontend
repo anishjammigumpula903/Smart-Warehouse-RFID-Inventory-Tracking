@@ -1,0 +1,1818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SmartWare — RFID Inventory System</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #080c10;
+    --surface: #0d1117;
+    --panel: #111820;
+    --border: #1e2d3d;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --accent3: #39ff6e;
+    --warn: #ffb700;
+    --danger: #ff3b5c;
+    --text: #e8edf2;
+    --muted: #5a7a8a;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ──── HEADER ──── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(8,12,16,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 18px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo-dot { width: 8px; height: 8px; background: var(--accent3); border-radius: 50%; animation: pulse 1.5s infinite; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  .header-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(57,255,110,0.08);
+    border: 1px solid rgba(57,255,110,0.2);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent3);
+    letter-spacing: 1px;
+  }
+  .status-dot { width: 6px; height: 6px; background: var(--accent3); border-radius: 50%; animation: pulse 1.2s infinite; }
+
+  /* ──── LAYOUT ──── */
+  .layout {
+    position: relative;
+    z-index: 1;
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: 24px 32px 48px;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 20px;
+  }
+
+  /* ──── SCANNER PANEL ──── */
+  .scanner-panel {
+    grid-row: 1 / 4;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-header {
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .panel-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .panel-icon { font-size: 16px; }
+
+  /* RFID visual */
+  .rfid-visual {
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .rfid-chip {
+    width: 120px;
+    height: 80px;
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,229,255,0.04);
+    transition: all 0.3s;
+  }
+
+  .rfid-chip.scanning {
+    border-color: var(--accent3);
+    background: rgba(57,255,110,0.08);
+    box-shadow: 0 0 20px rgba(57,255,110,0.3);
+  }
+
+  .rfid-chip::before, .rfid-chip::after {
+    content: '';
+    position: absolute;
+    border: 1px solid;
+    border-radius: 50%;
+    animation: rfid-wave 2s infinite;
+    opacity: 0;
+  }
+  .rfid-chip::before { width: 140px; height: 100px; border-color: rgba(0,229,255,0.3); animation-delay: 0s; }
+  .rfid-chip::after  { width: 165px; height: 120px; border-color: rgba(0,229,255,0.15); animation-delay: 0.5s; }
+
+  @keyframes rfid-wave {
+    0% { opacity: 0.8; transform: scale(0.8); }
+    100% { opacity: 0; transform: scale(1.2); }
+  }
+
+  .rfid-inner {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: center;
+  }
+
+  .rfid-lines {
+    display: flex;
+    gap: 3px;
+  }
+  .rfid-line {
+    width: 2px;
+    height: 20px;
+    background: var(--accent);
+    opacity: 0.6;
+  }
+  .rfid-line:nth-child(2) { height: 28px; }
+  .rfid-line:nth-child(4) { height: 14px; }
+  .rfid-line:nth-child(5) { height: 24px; }
+  .rfid-line:nth-child(6) { height: 18px; }
+
+  .scan-id {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    opacity: 0.7;
+  }
+
+  /* Controls */
+  .controls {
+    padding: 0 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1;
+  }
+
+  .field-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  select, input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+
+  .action-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .toggle-btn {
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 1px;
+  }
+  .toggle-btn.active-in {
+    background: rgba(57,255,110,0.1);
+    border-color: var(--accent3);
+    color: var(--accent3);
+  }
+  .toggle-btn.active-out {
+    background: rgba(255,107,53,0.1);
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
+  .qty-field {
+    display: flex;
+    gap: 8px;
+  }
+  .qty-field input { width: 80px; flex-shrink: 0; text-align: center; }
+
+  .scan-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .scan-btn:hover { background: #33ecff; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,229,255,0.3); }
+  .scan-btn:active { transform: translateY(0); }
+
+  .scan-btn.scanning-anim {
+    background: var(--accent3);
+    animation: scan-flash 0.4s ease;
+  }
+
+  @keyframes scan-flash {
+    0% { box-shadow: 0 0 0px rgba(57,255,110,0); }
+    50% { box-shadow: 0 0 30px rgba(57,255,110,0.6); }
+    100% { box-shadow: 0 0 0px rgba(57,255,110,0); }
+  }
+
+  .last-scan-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    min-height: 60px;
+  }
+  .last-scan-box .scan-result {
+    color: var(--accent3);
+    font-size: 11px;
+    line-height: 1.7;
+  }
+
+  /* ──── KPI STRIP ──── */
+  .kpi-strip {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+
+  .kpi-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .kpi-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    opacity: 0.5;
+  }
+  .kpi-card.warn::after { background: var(--warn); opacity: 1; }
+  .kpi-card.danger::after { background: var(--danger); opacity: 1; }
+  .kpi-card.success::after { background: var(--accent3); opacity: 1; }
+
+  .kpi-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .kpi-value {
+    font-family: var(--mono);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    transition: all 0.3s;
+  }
+  .kpi-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ──── INVENTORY TABLE ──── */
+  .inventory-panel {
+    grid-column: 2;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead tr {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  th {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 12px 16px;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(30,45,61,0.5);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: rgba(0,229,255,0.03); }
+  tbody tr.flash-row {
+    animation: row-flash 0.6s ease;
+  }
+
+  @keyframes row-flash {
+    0%   { background: rgba(57,255,110,0.15); }
+    100% { background: transparent; }
+  }
+
+  td {
+    padding: 13px 16px;
+    font-size: 13px;
+    vertical-align: middle;
+  }
+
+  .rfid-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: rgba(0,229,255,0.08);
+    border: 1px solid rgba(0,229,255,0.2);
+    color: var(--accent);
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+  }
+
+  .qty-cell {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 700;
+    transition: color 0.3s;
+  }
+
+  .stock-bar-wrap {
+    width: 80px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .stock-bar {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s, background 0.3s;
+  }
+
+  .status-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    padding: 3px 9px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+  .status-ok     { background: rgba(57,255,110,0.08); color: var(--accent3); border: 1px solid rgba(57,255,110,0.2); }
+  .status-low    { background: rgba(255,183,0,0.08);  color: var(--warn);    border: 1px solid rgba(255,183,0,0.2); }
+  .status-critical { background: rgba(255,59,92,0.08); color: var(--danger); border: 1px solid rgba(255,59,92,0.2); }
+
+  .loc-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* ──── MOVEMENT LOG ──── */
+  .movement-panel {
+    grid-column: 2;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .log-list {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  .log-list::-webkit-scrollbar { width: 4px; }
+  .log-list::-webkit-scrollbar-track { background: transparent; }
+  .log-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-item {
+    display: grid;
+    grid-template-columns: 140px 100px 1fr 60px 60px 70px;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(30,45,61,0.4);
+    font-size: 12px;
+    animation: slide-in 0.3s ease;
+  }
+
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(-8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-time {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .log-action-in  { color: var(--accent3); font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+  .log-action-out { color: var(--accent2); font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+
+  .log-qty { font-family: var(--mono); font-size: 12px; color: var(--text); text-align: right; }
+  .log-loc { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  .log-empty {
+    padding: 32px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  /* ──── ALERTS PANEL ──── */
+  .alerts-panel {
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .alert-card {
+    background: var(--panel);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    animation: slide-in 0.3s ease;
+  }
+  .alert-card.warn  { border: 1px solid rgba(255,183,0,0.3); background: rgba(255,183,0,0.04); }
+  .alert-card.danger { border: 1px solid rgba(255,59,92,0.3); background: rgba(255,59,92,0.04); }
+
+  .alert-icon { font-size: 18px; }
+  .alert-content { flex: 1; }
+  .alert-title { font-weight: 600; font-size: 13px; }
+  .alert-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; letter-spacing: 1px; }
+
+  .alert-qty {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .alert-qty.warn { color: var(--warn); }
+  .alert-qty.danger { color: var(--danger); }
+
+  .no-alerts {
+    background: var(--panel);
+    border: 1px solid rgba(57,255,110,0.2);
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--accent3);
+  }
+
+  /* ──── AUTO SCAN PANEL ──── */
+  .auto-panel {
+    padding: 0 20px 20px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+    margin-top: auto;
+  }
+
+  .auto-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .auto-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .toggle-switch {
+    position: relative;
+    width: 40px;
+    height: 22px;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 22px;
+    cursor: pointer;
+    transition: 0.3s;
+  }
+  .slider::before {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    left: 3px; top: 3px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: 0.3s;
+  }
+  input:checked + .slider { background: rgba(0,229,255,0.3); }
+  input:checked + .slider::before { transform: translateX(18px); background: var(--accent); }
+
+  /* ──── SECTION HEADERS ──── */
+  .section-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .badge-count {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: rgba(0,229,255,0.1);
+    border: 1px solid rgba(0,229,255,0.2);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* ──── TOAST ──── */
+  #toast {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    z-index: 999;
+    background: var(--panel);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    max-width: 280px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(.175,.885,.32,1.275);
+    pointer-events: none;
+  }
+  #toast.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  #toast.in-toast  { border: 1px solid rgba(57,255,110,0.3); color: var(--accent3); }
+  #toast.out-toast { border: 1px solid rgba(255,107,53,0.3); color: var(--accent2); }
+  #toast.warn-toast { border: 1px solid rgba(255,183,0,0.4); color: var(--warn); }
+
+  /* ──── RESPONSIVE ──── */
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 1fr; }
+    .scanner-panel { grid-row: auto; }
+    .kpi-strip, .inventory-panel, .movement-panel, .alerts-panel { grid-column: 1; }
+    .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ──── AI PREDICTION PANEL ──── */
+  .ai-panel {
+    grid-column: 2;
+    background: var(--panel);
+    border: 1px solid rgba(167,139,250,0.25);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .ai-panel-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(167,139,250,0.15);
+    background: rgba(167,139,250,0.04);
+  }
+  .ai-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #a78bfa;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .ai-dot {
+    width: 7px; height: 7px;
+    background: #a78bfa;
+    border-radius: 50%;
+    animation: pulse 1.8s infinite;
+  }
+  .ai-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.25);
+    color: #a78bfa;
+    padding: 2px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .ai-badge:hover { background: rgba(167,139,250,0.2); }
+
+  .ai-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(167,139,250,0.1);
+    flex-wrap: wrap;
+  }
+  .ai-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 7px 12px;
+    outline: none;
+    flex: 1;
+    min-width: 180px;
+    appearance: none;
+  }
+  .ai-select:focus { border-color: #a78bfa; }
+  .ai-run-btn {
+    background: linear-gradient(135deg,#a78bfa,#7c3aed);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 8px 18px;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    white-space: nowrap;
+  }
+  .ai-run-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+  .ai-run-all-btn {
+    background: rgba(167,139,250,0.12);
+    color: #a78bfa;
+    border: 1px solid rgba(167,139,250,0.3);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+  .ai-run-all-btn:hover { background: rgba(167,139,250,0.22); }
+
+  .ai-body { padding: 18px 20px; }
+
+  /* summary cards row */
+  .ai-summary-row {
+    display: grid;
+    grid-template-columns: repeat(4,1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .ai-stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .ai-stat::before {
+    content:'';
+    position:absolute;
+    top:0;left:0;right:0;
+    height:2px;
+  }
+  .ai-stat.purple::before { background:#a78bfa; }
+  .ai-stat.cyan::before   { background:var(--accent); }
+  .ai-stat.green::before  { background:var(--accent3); }
+  .ai-stat.warn::before   { background:var(--warn); }
+  .ai-stat-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .ai-stat-val {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .ai-stat-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+  /* chart */
+  .ai-chart-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+  .ai-chart-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .ai-chart-svg { width: 100%; overflow: visible; }
+
+  /* table of predictions */
+  .ai-table-wrap { overflow-x: auto; }
+  .ai-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .ai-table thead tr {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .ai-table th {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    text-transform: uppercase;
+    padding: 10px 14px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .ai-table tbody tr {
+    border-bottom: 1px solid rgba(30,45,61,0.4);
+    transition: background 0.15s;
+  }
+  .ai-table tbody tr:hover { background: rgba(167,139,250,0.04); }
+  .ai-table td { padding: 11px 14px; vertical-align: middle; }
+
+  .trend-up   { color: var(--accent3); font-family:var(--mono); font-size:11px; font-weight:700; }
+  .trend-down { color: var(--danger);  font-family:var(--mono); font-size:11px; font-weight:700; }
+  .trend-flat { color: var(--muted);   font-family:var(--mono); font-size:11px; font-weight:700; }
+
+  .rec-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .rec-urgent  { background:rgba(255,59,92,0.1);  color:var(--danger);  border:1px solid rgba(255,59,92,0.25); }
+  .rec-reorder { background:rgba(255,183,0,0.1);  color:var(--warn);    border:1px solid rgba(255,183,0,0.25); }
+  .rec-watch   { background:rgba(0,229,255,0.08); color:var(--accent);  border:1px solid rgba(0,229,255,0.2); }
+  .rec-ok      { background:rgba(57,255,110,0.08);color:var(--accent3); border:1px solid rgba(57,255,110,0.2); }
+
+  .ai-empty {
+    padding: 32px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+  .ai-thinking {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 28px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: #a78bfa;
+    letter-spacing: 1px;
+  }
+  .ai-spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(167,139,250,0.2);
+    border-top-color: #a78bfa;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* confidence bar */
+  .conf-bar-wrap { width:60px; height:4px; background:var(--border); border-radius:2px; overflow:hidden; display:inline-block; vertical-align:middle; margin-left:6px; }
+  .conf-bar { height:100%; border-radius:2px; background:#a78bfa; }
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    SMARTWARE
+  </div>
+  <div class="header-meta">RFID INVENTORY MANAGEMENT SYSTEM v2.1</div>
+  <div class="status-pill">
+    <div class="status-dot"></div>
+    SYSTEM ONLINE
+  </div>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- ── SCANNER PANEL ── -->
+  <div class="scanner-panel">
+    <div class="panel-header">
+      <span class="panel-title">RFID SCANNER</span>
+      <span class="panel-icon">📡</span>
+    </div>
+
+    <div class="rfid-visual">
+      <div class="rfid-chip" id="rfidChip">
+        <div class="rfid-inner">
+          <div class="rfid-lines">
+            <div class="rfid-line"></div>
+            <div class="rfid-line"></div>
+            <div class="rfid-line"></div>
+            <div class="rfid-line"></div>
+            <div class="rfid-line"></div>
+            <div class="rfid-line"></div>
+          </div>
+        </div>
+      </div>
+      <div class="scan-id" id="chipId">── AWAITING SCAN ──</div>
+    </div>
+
+    <div class="controls">
+      <!-- RFID Tag -->
+      <div>
+        <div class="field-label">RFID Tag</div>
+        <select id="rfidSelect"></select>
+      </div>
+
+      <!-- Location -->
+      <div>
+        <div class="field-label">Reader Location</div>
+        <select id="locationSelect">
+          <option value="A1">Zone A1 — Receiving Bay</option>
+          <option value="B2">Zone B2 — Storage East</option>
+          <option value="C3">Zone C3 — Storage West</option>
+          <option value="D4">Zone D4 — Dispatch Bay</option>
+          <option value="E5">Zone E5 — Cold Storage</option>
+        </select>
+      </div>
+
+      <!-- Action -->
+      <div>
+        <div class="field-label">Scan Action</div>
+        <div class="action-toggle">
+          <button class="toggle-btn active-in" id="btnIN" onclick="setAction('IN')">▲ IN</button>
+          <button class="toggle-btn" id="btnOUT" onclick="setAction('OUT')">▼ OUT</button>
+        </div>
+      </div>
+
+      <!-- Quantity -->
+      <div>
+        <div class="field-label">Quantity</div>
+        <div class="qty-field">
+          <input type="number" id="qtyInput" value="1" min="1" max="500" style="width:100%"/>
+        </div>
+      </div>
+
+      <!-- Scan Button -->
+      <button class="scan-btn" id="scanBtn" onclick="performScan()">
+        ⚡ SCAN RFID
+      </button>
+
+      <!-- Last scan result -->
+      <div class="last-scan-box" id="lastScanBox">
+        <span style="letter-spacing:1px">Awaiting first scan...</span>
+      </div>
+    </div>
+
+    <!-- Auto Scan -->
+    <div class="auto-panel">
+      <div class="auto-row">
+        <span class="auto-label">AUTO-SIMULATE SCANS</span>
+        <label class="toggle-switch">
+          <input type="checkbox" id="autoToggle" onchange="toggleAuto()"/>
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div style="font-size:10px; color: var(--muted); margin-top:6px; font-family: var(--mono);">
+        Generates random RFID events every 2s
+      </div>
+    </div>
+  </div>
+
+  <!-- ── KPI STRIP ── -->
+  <div class="kpi-strip">
+    <div class="kpi-card success">
+      <div class="kpi-label">Total SKUs</div>
+      <div class="kpi-value" id="kpiSkus">0</div>
+      <div class="kpi-sub">products tracked</div>
+    </div>
+    <div class="kpi-card" id="kpiTotalCard">
+      <div class="kpi-label">Total Stock</div>
+      <div class="kpi-value" id="kpiTotal">0</div>
+      <div class="kpi-sub">units in warehouse</div>
+    </div>
+    <div class="kpi-card" id="kpiAlertsCard">
+      <div class="kpi-label">Active Alerts</div>
+      <div class="kpi-value" id="kpiAlerts">0</div>
+      <div class="kpi-sub">need reorder</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Scan Events</div>
+      <div class="kpi-value" id="kpiScans">0</div>
+      <div class="kpi-sub">total movements</div>
+    </div>
+  </div>
+
+  <!-- ── INVENTORY TABLE ── -->
+  <div class="inventory-panel">
+    <div class="section-hdr">
+      <span class="panel-title">📦 REAL-TIME INVENTORY DASHBOARD</span>
+      <span class="badge-count" id="inventoryCount">0 products</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>RFID TAG</th>
+            <th>PRODUCT</th>
+            <th>CATEGORY</th>
+            <th>LOCATION</th>
+            <th>QUANTITY</th>
+            <th>STOCK LEVEL</th>
+            <th>REORDER AT</th>
+            <th>STATUS</th>
+            <th>LAST MOVEMENT</th>
+          </tr>
+        </thead>
+        <tbody id="inventoryBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── MOVEMENT TRACE ── -->
+  <div class="movement-panel">
+    <div class="section-hdr">
+      <span class="panel-title">📍 PRODUCT MOVEMENT TRACE</span>
+      <span class="badge-count" id="movCount">0 events</span>
+    </div>
+    <div class="log-list" id="logList">
+      <div class="log-empty">No movement events recorded yet.</div>
+    </div>
+    <div style="padding: 10px 16px; border-top: 1px solid var(--border); display:flex; gap:10px;">
+      <div style="font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:1px;">
+        LOG HEADER:
+      </div>
+      <div style="font-family:var(--mono); font-size:10px; color: rgba(90,122,138,0.5); letter-spacing:0.5px; flex:1;">
+        TIMESTAMP &nbsp;|&nbsp; RFID &nbsp;|&nbsp; PRODUCT &nbsp;|&nbsp; ACTION &nbsp;|&nbsp; LOCATION &nbsp;|&nbsp; QTY AFTER
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ALERTS ── -->
+  <div class="alerts-panel" style="grid-column:2">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding: 0 4px 8px;">
+      <span class="panel-title" style="font-family:var(--mono); font-size:11px; letter-spacing:2px; color: var(--warn);">⚠ STOCK ALERTS</span>
+      <span class="badge-count" id="alertCount" style="border-color: rgba(255,183,0,0.3); color:var(--warn); background: rgba(255,183,0,0.05);">0 alerts</span>
+    </div>
+    <div id="alertsContainer">
+      <div class="no-alerts">✓ All stock levels are within safe thresholds</div>
+    </div>
+  </div>
+
+  <!-- ── AI DEMAND FORECAST PANEL ── -->
+  <div class="ai-panel" id="aiPanel">
+    <div class="ai-panel-hdr">
+      <div class="ai-title">
+        <div class="ai-dot"></div>
+        🤖 AI DEMAND FORECAST &amp; REORDER ENGINE
+      </div>
+      <span class="ai-badge" onclick="runAllPredictions()">⚡ RUN ALL</span>
+    </div>
+    <div class="ai-controls">
+      <select class="ai-select" id="aiProductSelect">
+        <option value="">— Select a product to analyse —</option>
+      </select>
+      <button class="ai-run-btn" onclick="runSinglePrediction()">▶ ANALYSE</button>
+      <button class="ai-run-all-btn" onclick="runAllPredictions()">🔁 ALL PRODUCTS</button>
+    </div>
+    <div class="ai-body" id="aiBody">
+      <div class="ai-empty">Select a product and click ANALYSE — or click RUN ALL for a full warehouse forecast.</div>
+    </div>
+  </div>
+
+
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ──────────────────────────────────────────────
+//  DATA
+// ──────────────────────────────────────────────
+const PRODUCTS = [
+{rfid:'RFID-0001',name:'Mechanical Keyboard',category:'Electronics',qty:50,reorder:10,location:'A1'},
+{rfid:'RFID-0002',name:'Wireless Mouse',category:'Electronics',qty:80,reorder:20,location:'B2'},
+{rfid:'RFID-0003',name:'4K Monitor',category:'Electronics',qty:15,reorder:5,location:'C3'},
+{rfid:'RFID-0004',name:'USB-C Hub',category:'Accessories',qty:25,reorder:10,location:'A1'},
+{rfid:'RFID-0005',name:'Office Chair',category:'Furniture',qty:20,reorder:8,location:'D4'},
+{rfid:'RFID-0006',name:'Standing Desk',category:'Furniture',qty:6,reorder:5,location:'D4'},
+{rfid:'RFID-0007',name:'Desk Lamp',category:'Furniture',qty:60,reorder:15,location:'B2'},
+{rfid:'RFID-0008',name:'Thermal Label Paper',category:'Supplies',qty:200,reorder:50,location:'E5'},
+{rfid:'RFID-0009',name:'Packing Tape',category:'Supplies',qty:40,reorder:20,location:'E5'},
+{rfid:'RFID-0010',name:'Bubble Wrap Roll',category:'Supplies',qty:18,reorder:10,location:'C3'},
+
+{rfid:'RFID-0011',name:'Barcode Scanner',category:'Electronics',qty:12,reorder:4,location:'A1'},
+{rfid:'RFID-0012',name:'Laptop Stand',category:'Accessories',qty:30,reorder:12,location:'B2'},
+{rfid:'RFID-0013',name:'HDMI Cable',category:'Accessories',qty:120,reorder:40,location:'B2'},
+{rfid:'RFID-0014',name:'Ethernet Cable',category:'Accessories',qty:100,reorder:30,location:'C1'},
+{rfid:'RFID-0015',name:'Router',category:'Electronics',qty:15,reorder:5,location:'C2'},
+{rfid:'RFID-0016',name:'External Hard Drive',category:'Electronics',qty:22,reorder:8,location:'C3'},
+{rfid:'RFID-0017',name:'Storage Bin',category:'Warehouse',qty:90,reorder:30,location:'D1'},
+{rfid:'RFID-0018',name:'Plastic Pallet',category:'Warehouse',qty:45,reorder:15,location:'D2'},
+{rfid:'RFID-0019',name:'Cold Storage Container',category:'Warehouse',qty:12,reorder:4,location:'E5'},
+{rfid:'RFID-0020',name:'Safety Gloves',category:'Safety',qty:150,reorder:50,location:'A2'},
+
+{rfid:'RFID-0021',name:'Safety Helmet',category:'Safety',qty:90,reorder:25,location:'A2'},
+{rfid:'RFID-0022',name:'Industrial Mask',category:'Safety',qty:200,reorder:60,location:'A2'},
+{rfid:'RFID-0023',name:'Screwdriver Set',category:'Tools',qty:35,reorder:12,location:'B1'},
+{rfid:'RFID-0024',name:'Power Drill',category:'Tools',qty:14,reorder:5,location:'B1'},
+{rfid:'RFID-0025',name:'Hammer',category:'Tools',qty:70,reorder:20,location:'B1'},
+{rfid:'RFID-0026',name:'Adjustable Wrench',category:'Tools',qty:40,reorder:15,location:'B1'},
+{rfid:'RFID-0027',name:'Tool Kit Box',category:'Tools',qty:18,reorder:6,location:'B1'},
+{rfid:'RFID-0028',name:'Printer Cartridge',category:'Office',qty:60,reorder:20,location:'C1'},
+{rfid:'RFID-0029',name:'A4 Paper Pack',category:'Office',qty:300,reorder:100,location:'C1'},
+{rfid:'RFID-0030',name:'Stapler',category:'Office',qty:80,reorder:30,location:'C1'},
+
+{rfid:'RFID-0031',name:'Notebook Pack',category:'Office',qty:120,reorder:40,location:'C1'},
+{rfid:'RFID-0032',name:'Marker Pens',category:'Office',qty:140,reorder:50,location:'C1'},
+{rfid:'RFID-0033',name:'Whiteboard',category:'Office',qty:10,reorder:4,location:'C2'},
+{rfid:'RFID-0034',name:'Projector',category:'Electronics',qty:6,reorder:2,location:'C2'},
+{rfid:'RFID-0035',name:'Laptop Charger',category:'Electronics',qty:35,reorder:10,location:'C2'},
+{rfid:'RFID-0036',name:'Tablet Device',category:'Electronics',qty:22,reorder:8,location:'C2'},
+{rfid:'RFID-0037',name:'LED Strip Light',category:'Electronics',qty:70,reorder:20,location:'C2'},
+{rfid:'RFID-0038',name:'Server Rack',category:'IT',qty:8,reorder:3,location:'D3'},
+{rfid:'RFID-0039',name:'Network Switch',category:'IT',qty:12,reorder:4,location:'D3'},
+{rfid:'RFID-0040',name:'UPS Battery',category:'IT',qty:18,reorder:6,location:'D3'},
+
+{rfid:'RFID-0041',name:'SSD Drive',category:'IT',qty:50,reorder:15,location:'D3'},
+{rfid:'RFID-0042',name:'RAM Module',category:'IT',qty:65,reorder:20,location:'D3'},
+{rfid:'RFID-0043',name:'Cooling Fan',category:'Electronics',qty:90,reorder:30,location:'D3'},
+{rfid:'RFID-0044',name:'Graphics Card',category:'Electronics',qty:7,reorder:3,location:'D3'},
+{rfid:'RFID-0045',name:'Motherboard',category:'Electronics',qty:11,reorder:4,location:'D3'},
+{rfid:'RFID-0046',name:'CPU Processor',category:'Electronics',qty:9,reorder:3,location:'D3'},
+{rfid:'RFID-0047',name:'Keyboard Tray',category:'Furniture',qty:40,reorder:15,location:'D4'},
+{rfid:'RFID-0048',name:'Monitor Stand',category:'Furniture',qty:28,reorder:10,location:'D4'},
+{rfid:'RFID-0049',name:'Cable Organizer',category:'Accessories',qty:150,reorder:40,location:'B2'},
+{rfid:'RFID-0050',name:'Desk Drawer Unit',category:'Furniture',qty:16,reorder:6,location:'D4'}
+];
+
+let inventory = JSON.parse(JSON.stringify(PRODUCTS));
+let movements = [];
+let scanCount = 0;
+let selectedAction = 'IN';
+let autoInterval = null;
+
+// ──────────────────────────────────────────────
+//  INIT
+// ──────────────────────────────────────────────
+function init() {
+  populateRFIDDropdown();
+  renderInventory();
+  renderKPIs();
+  renderAlerts();
+}
+
+function populateRFIDDropdown() {
+  const sel = document.getElementById('rfidSelect');
+  sel.innerHTML = '';
+  inventory.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.rfid;
+    opt.textContent = `${p.rfid} — ${p.name}`;
+    sel.appendChild(opt);
+  });
+}
+
+// ──────────────────────────────────────────────
+//  SCAN LOGIC
+// ──────────────────────────────────────────────
+function setAction(a) {
+  selectedAction = a;
+  document.getElementById('btnIN').className  = 'toggle-btn' + (a === 'IN'  ? ' active-in'  : '');
+  document.getElementById('btnOUT').className = 'toggle-btn' + (a === 'OUT' ? ' active-out' : '');
+}
+
+function performScan(autoData) {
+  const rfidId  = autoData ? autoData.rfid     : document.getElementById('rfidSelect').value;
+  const loc     = autoData ? autoData.loc      : document.getElementById('locationSelect').value;
+  const action  = autoData ? autoData.action   : selectedAction;
+  const qty     = autoData ? autoData.qty      : parseInt(document.getElementById('qtyInput').value) || 1;
+
+  const product = inventory.find(p => p.rfid === rfidId);
+  if (!product) return;
+
+  let changed = 0;
+  if (action === 'IN') {
+    product.qty += qty;
+    changed = qty;
+  } else {
+    if (product.qty <= 0) {
+      showToast(`${product.name} — OUT OF STOCK`, 'warn');
+      return;
+    }
+    changed = Math.min(qty, product.qty);
+    product.qty -= changed;
+  }
+
+  product.lastMov = action;
+  product.lastMovTime = new Date();
+  product.location = loc;
+  if (action === 'OUT') recordDemand(rfidId, changed);
+
+  scanCount++;
+
+  // Movement log entry
+  const log = {
+    time: new Date(),
+    rfid: rfidId,
+    product: product.name,
+    action,
+    location: loc,
+    qty: product.qty,
+    changed
+  };
+  movements.unshift(log);
+  if (movements.length > 200) movements.pop();
+
+  // Animate chip
+  const chip = document.getElementById('rfidChip');
+  chip.classList.add('scanning');
+  document.getElementById('chipId').textContent = rfidId;
+  setTimeout(() => chip.classList.remove('scanning'), 600);
+
+  // Animate scan button
+  const btn = document.getElementById('scanBtn');
+  btn.classList.add('scanning-anim');
+  setTimeout(() => btn.classList.remove('scanning-anim'), 600);
+
+  // Update last scan box
+  document.getElementById('lastScanBox').innerHTML = `
+    <div class="scan-result">
+      ${action === 'IN' ? '▲' : '▼'} ${action} ${changed} × ${product.name}<br/>
+      TAG: ${rfidId}<br/>
+      LOC: ${loc} &nbsp;|&nbsp; STOCK NOW: ${product.qty} units
+    </div>`;
+
+  // Toast
+  const toastType = action === 'IN' ? 'in-toast' : 'out-toast';
+  showToast(`${action} ${changed}× ${product.name} @ ${loc}`, toastType);
+
+  // Low stock alert toast
+  if (product.qty <= product.reorder) {
+    setTimeout(() => {
+      showToast(`⚠ LOW STOCK: ${product.name} (${product.qty} left)`, 'warn-toast');
+    }, 800);
+  }
+
+  renderInventory(rfidId);
+  renderMovements();
+  renderKPIs();
+  renderAlerts();
+}
+
+// ──────────────────────────────────────────────
+//  RENDER INVENTORY
+// ──────────────────────────────────────────────
+function renderInventory(highlightRfid) {
+  const tbody = document.getElementById('inventoryBody');
+  document.getElementById('inventoryCount').textContent = `${inventory.length} products`;
+
+  tbody.innerHTML = inventory.map(p => {
+    const maxQty = PRODUCTS.find(x => x.rfid === p.rfid)?.qty || 100;
+    const pct = Math.min(100, Math.round((p.qty / (maxQty * 1.5)) * 100));
+    const ratio = p.qty / p.reorder;
+    const status = p.qty === 0 ? 'critical' : ratio <= 1 ? 'critical' : ratio <= 1.5 ? 'low' : 'ok';
+    const statusLabel = p.qty === 0 ? 'OUT OF STOCK' : status === 'critical' ? 'CRITICAL' : status === 'low' ? 'LOW STOCK' : 'IN STOCK';
+    const barColor = status === 'ok' ? 'var(--accent3)' : status === 'low' ? 'var(--warn)' : 'var(--danger)';
+    const qtyColor = status === 'ok' ? 'var(--text)' : status === 'low' ? 'var(--warn)' : 'var(--danger)';
+    const lastMov = p.lastMovTime
+      ? `<span style="color:${p.lastMov==='IN'?'var(--accent3)':'var(--accent2)'}">
+           ${p.lastMov} — ${timeAgo(p.lastMovTime)}
+         </span>`
+      : `<span style="color:var(--muted)">—</span>`;
+
+    const flash = highlightRfid === p.rfid ? ' class="flash-row"' : '';
+
+    return `<tr${flash}>
+      <td><span class="rfid-badge">${p.rfid}</span></td>
+      <td style="font-weight:500">${p.name}</td>
+      <td style="color:var(--muted);font-size:12px">${p.category}</td>
+      <td><span class="loc-badge">${p.location}</span></td>
+      <td><span class="qty-cell" style="color:${qtyColor}">${p.qty}</span></td>
+      <td>
+        <div class="stock-bar-wrap">
+          <div class="stock-bar" style="width:${pct}%;background:${barColor}"></div>
+        </div>
+      </td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${p.reorder}</td>
+      <td><span class="status-badge status-${status}">${statusLabel}</span></td>
+      <td style="font-size:11px">${lastMov}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────
+//  RENDER MOVEMENTS
+// ──────────────────────────────────────────────
+function renderMovements() {
+  const list = document.getElementById('logList');
+  document.getElementById('movCount').textContent = `${movements.length} events`;
+
+  if (movements.length === 0) {
+    list.innerHTML = '<div class="log-empty">No movement events recorded yet.</div>';
+    return;
+  }
+
+  list.innerHTML = movements.slice(0, 50).map(m => `
+    <div class="log-item">
+      <span class="log-time">${formatTime(m.time)}</span>
+      <span class="rfid-badge" style="font-size:9px">${m.rfid}</span>
+      <span style="font-size:12px;font-weight:500">${m.product}</span>
+      <span class="${m.action==='IN'?'log-action-in':'log-action-out'}">${m.action==='IN'?'▲ IN':'▼ OUT'}</span>
+      <span class="log-loc">${m.location}</span>
+      <span class="log-qty">${m.qty}</span>
+    </div>
+  `).join('');
+}
+
+// ──────────────────────────────────────────────
+//  RENDER KPIs
+// ──────────────────────────────────────────────
+function renderKPIs() {
+  const totalStock = inventory.reduce((s, p) => s + p.qty, 0);
+  const alertCount = inventory.filter(p => p.qty <= p.reorder).length;
+
+  document.getElementById('kpiSkus').textContent   = inventory.length;
+  document.getElementById('kpiTotal').textContent  = totalStock.toLocaleString();
+  document.getElementById('kpiAlerts').textContent = alertCount;
+  document.getElementById('kpiScans').textContent  = scanCount;
+
+  const alertCard = document.getElementById('kpiAlertsCard');
+  alertCard.className = 'kpi-card ' + (alertCount === 0 ? '' : alertCount < 3 ? 'warn' : 'danger');
+}
+
+// ──────────────────────────────────────────────
+//  RENDER ALERTS
+// ──────────────────────────────────────────────
+function renderAlerts() {
+  const container = document.getElementById('alertsContainer');
+  const badge = document.getElementById('alertCount');
+
+  const alerts = inventory.filter(p => p.qty <= p.reorder);
+  badge.textContent = `${alerts.length} alert${alerts.length !== 1 ? 's' : ''}`;
+
+  if (alerts.length === 0) {
+    container.innerHTML = '<div class="no-alerts">✓ All stock levels are within safe thresholds</div>';
+    return;
+  }
+
+  container.innerHTML = alerts.map(p => {
+    const isCritical = p.qty === 0 || p.qty < p.reorder * 0.5;
+    const cls = isCritical ? 'danger' : 'warn';
+    const icon = isCritical ? '🔴' : '🟡';
+    const label = isCritical ? (p.qty === 0 ? 'OUT OF STOCK' : 'CRITICAL LEVEL') : 'LOW STOCK';
+    return `<div class="alert-card ${cls}">
+      <span class="alert-icon">${icon}</span>
+      <div class="alert-content">
+        <div class="alert-title">${p.name}</div>
+        <div class="alert-sub">${p.rfid} &nbsp;·&nbsp; ${p.location} &nbsp;·&nbsp; REORDER AT ${p.reorder} UNITS &nbsp;·&nbsp; ${label}</div>
+      </div>
+      <div class="alert-qty ${cls}">${p.qty}</div>
+    </div>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────
+//  AUTO SIMULATE
+// ──────────────────────────────────────────────
+function toggleAuto() {
+  const on = document.getElementById('autoToggle').checked;
+  if (on) {
+    autoInterval = setInterval(() => {
+      const p = inventory[Math.floor(Math.random() * inventory.length)];
+      const actions = ['IN', 'IN', 'OUT', 'OUT', 'OUT'];
+      const locs = ['A1','B2','C3','D4','E5'];
+      performScan({
+        rfid: p.rfid,
+        loc: locs[Math.floor(Math.random() * locs.length)],
+        action: actions[Math.floor(Math.random() * actions.length)],
+        qty: Math.floor(Math.random() * 5) + 1
+      });
+    }, 2000);
+  } else {
+    clearInterval(autoInterval);
+  }
+}
+
+// ──────────────────────────────────────────────
+//  TOAST
+// ──────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, 2800);
+}
+
+// ──────────────────────────────────────────────
+//  UTILS
+// ──────────────────────────────────────────────
+function formatTime(d) {
+  return d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+function timeAgo(d) {
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s/60)}m ago`;
+  return `${Math.floor(s/3600)}h ago`;
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+//  ML ENGINE — Linear Regression + Exponential Smoothing + Reorder
+// ══════════════════════════════════════════════════════════════════
+
+// Seed synthetic history for each product at startup
+// Each product gets 30 days of simulated OUT movements (demand)
+const demandHistory = {}; // { rfid: [{ day: -N, qty: X }, ...] }
+
+function seedHistory() {
+  PRODUCTS.forEach(p => {
+    const base = Math.max(1, Math.round(p.reorder * 0.6));
+    const days = [];
+    for (let d = 29; d >= 0; d--) {
+      // add trend + noise + occasional spike
+      const trend  = d < 15 ? 0 : (p.qty > 50 ? 0.3 : -0.2);      // recent slight uptick
+      const noise  = (Math.random() - 0.5) * base * 0.8;
+      const spike  = Math.random() < 0.08 ? base * 1.8 : 0;        // 8% chance spike
+      const raw    = base + trend * (30 - d) + noise + spike;
+      days.push({ day: -d, qty: Math.max(0, Math.round(raw)) });
+    }
+    demandHistory[p.rfid] = days;
+  });
+}
+
+// When a real OUT scan happens, append to demandHistory
+function recordDemand(rfidId, qty) {
+  if (!demandHistory[rfidId]) demandHistory[rfidId] = [];
+  demandHistory[rfidId].push({ day: 0, qty });
+  if (demandHistory[rfidId].length > 60) demandHistory[rfidId].shift();
+}
+
+// ── Linear Regression on last N days ─────────────────────────────
+function linearRegression(data) {
+  const n = data.length;
+  if (n < 2) return { slope: 0, intercept: data[0]?.qty || 0, r2: 0 };
+  let sumX=0, sumY=0, sumXY=0, sumX2=0;
+  data.forEach((d,i) => { sumX+=i; sumY+=d.qty; sumXY+=i*d.qty; sumX2+=i*i; });
+  const slope     = (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX);
+  const intercept = (sumY - slope*sumX) / n;
+  // R²
+  const yMean = sumY / n;
+  let ssTot=0, ssRes=0;
+  data.forEach((d,i) => { ssTot+=(d.qty-yMean)**2; ssRes+=(d.qty-(slope*i+intercept))**2; });
+  const r2 = ssTot === 0 ? 1 : Math.max(0, 1 - ssRes/ssTot);
+  return { slope, intercept, r2 };
+}
+
+// ── Exponential Smoothing (alpha=0.3) ────────────────────────────
+function expSmoothing(data, alpha=0.3) {
+  if (!data.length) return 0;
+  let s = data[0].qty;
+  for (let i=1;i<data.length;i++) s = alpha*data[i].qty + (1-alpha)*s;
+  return s;
+}
+
+// ── Moving Average ────────────────────────────────────────────────
+function movingAvg(data, window=7) {
+  const slice = data.slice(-window);
+  return slice.reduce((a,b)=>a+b.qty,0) / slice.length;
+}
+
+// ── Ensemble forecast: blend LR + ES + MA ────────────────────────
+function forecastDemand(rfidId, horizonDays=7) {
+  const hist = demandHistory[rfidId] || [];
+  if (hist.length < 3) return { daily: 1, total: horizonDays, confidence: 0.3, trend: 'flat' };
+
+  const lr   = linearRegression(hist);
+  const es   = expSmoothing(hist);
+  const ma   = movingAvg(hist);
+  const lrNext = Math.max(0, lr.intercept + lr.slope * hist.length);
+
+  // weighted ensemble
+  const daily = Math.max(0, 0.4*lrNext + 0.35*es + 0.25*ma);
+  const total = Math.round(daily * horizonDays);
+
+  // confidence based on R² and data volume
+  const confidence = Math.min(0.97, 0.4 + lr.r2*0.4 + Math.min(hist.length/30,1)*0.2);
+
+  // trend direction
+  const trend = lr.slope > 0.15 ? 'up' : lr.slope < -0.15 ? 'down' : 'flat';
+
+  return { daily: Math.round(daily*10)/10, total, confidence: Math.round(confidence*100), trend, lr, es, ma };
+}
+
+// ── Reorder recommendation ────────────────────────────────────────
+function getRecommendation(product, forecast) {
+  const p = product;
+  const daysOfStock = forecast.daily > 0 ? Math.floor(p.qty / forecast.daily) : 99;
+  const leadTimeDays = 3; // assumed lead time
+  const safetyStock  = Math.ceil(forecast.daily * leadTimeDays * 1.5);
+  const reorderQty   = Math.max(p.reorder, Math.ceil(forecast.total * 2));
+
+  let level, label, color;
+  if (p.qty === 0)              { level='urgent';  label='REORDER NOW — OUT OF STOCK'; }
+  else if (daysOfStock <= leadTimeDays) { level='urgent';  label=`REORDER NOW — ${daysOfStock}d left`; }
+  else if (p.qty <= p.reorder)  { level='reorder'; label=`REORDER SOON — ${daysOfStock}d left`; }
+  else if (daysOfStock <= 14)   { level='watch';   label=`MONITOR — ${daysOfStock}d left`; }
+  else                          { level='ok';      label=`SUFFICIENT — ${daysOfStock}d left`; }
+
+  return { level, label, daysOfStock, safetyStock, reorderQty };
+}
+
+// ── Populate AI product dropdown ──────────────────────────────────
+function populateAIDropdown() {
+  const sel = document.getElementById('aiProductSelect');
+  sel.innerHTML = '<option value="">— Select a product to analyse —</option>';
+  inventory.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.rfid;
+    opt.textContent = p.rfid + ' — ' + p.name;
+    sel.appendChild(opt);
+  });
+}
+
+// ── Run prediction for single selected product ────────────────────
+function runSinglePrediction() {
+  const rfid = document.getElementById('aiProductSelect').value;
+  if (!rfid) { showToast('Select a product first', 'warn-toast'); return; }
+  const product = inventory.find(p => p.rfid === rfid);
+  if (!product) return;
+  const body = document.getElementById('aiBody');
+  body.innerHTML = '<div class="ai-thinking"><div class="ai-spinner"></div>ANALYSING DEMAND PATTERNS…</div>';
+  setTimeout(() => {
+    const fc = forecastDemand(rfid, 7);
+    const rec = getRecommendation(product, fc);
+    body.innerHTML = buildSingleReport(product, fc, rec);
+  }, 500);
+}
+
+// ── Run predictions for ALL products ─────────────────────────────
+function runAllPredictions() {
+  const body = document.getElementById('aiBody');
+  body.innerHTML = '<div class="ai-thinking"><div class="ai-spinner"></div>RUNNING FULL WAREHOUSE FORECAST…</div>';
+  setTimeout(() => {
+    const results = inventory.map(p => {
+      const fc  = forecastDemand(p.rfid, 7);
+      const rec = getRecommendation(p, fc);
+      return { p, fc, rec };
+    }).sort((a,b) => {
+      const pri = {urgent:0, reorder:1, watch:2, ok:3};
+      return (pri[a.rec.level]||3) - (pri[b.rec.level]||3);
+    });
+
+    const urgent  = results.filter(r=>r.rec.level==='urgent').length;
+    const reorder = results.filter(r=>r.rec.level==='reorder').length;
+    const watch   = results.filter(r=>r.rec.level==='watch').length;
+    const ok      = results.filter(r=>r.rec.level==='ok').length;
+    const avgConf = Math.round(results.reduce((s,r)=>s+r.fc.confidence,0)/results.length);
+    const totalDemand7d = results.reduce((s,r)=>s+r.fc.total,0);
+
+    body.innerHTML = `
+      <div class="ai-summary-row">
+        <div class="ai-stat purple">
+          <div class="ai-stat-label">Avg Confidence</div>
+          <div class="ai-stat-val">${avgConf}%</div>
+          <div class="ai-stat-sub">ensemble model</div>
+        </div>
+        <div class="ai-stat warn">
+          <div class="ai-stat-label">Need Reorder</div>
+          <div class="ai-stat-val">${urgent+reorder}</div>
+          <div class="ai-stat-sub">${urgent} urgent · ${reorder} soon</div>
+        </div>
+        <div class="ai-stat cyan">
+          <div class="ai-stat-label">7-Day Demand</div>
+          <div class="ai-stat-val">${totalDemand7d.toLocaleString()}</div>
+          <div class="ai-stat-sub">total units forecast</div>
+        </div>
+        <div class="ai-stat green">
+          <div class="ai-stat-label">Sufficient Stock</div>
+          <div class="ai-stat-val">${ok}</div>
+          <div class="ai-stat-sub">products healthy</div>
+        </div>
+      </div>
+      ${buildForecastChart(results)}
+      <div class="ai-table-wrap">
+        <table class="ai-table">
+          <thead><tr>
+            <th>RFID</th><th>PRODUCT</th><th>CURRENT QTY</th>
+            <th>DAILY DEMAND</th><th>7D FORECAST</th><th>TREND</th>
+            <th>CONFIDENCE</th><th>DAYS LEFT</th><th>REORDER QTY</th><th>⚠ RECOMMENDATION</th>
+          </tr></thead>
+          <tbody>
+            ${results.map(({p,fc,rec}) => `
+              <tr>
+                <td><span class="rfid-badge" style="font-size:9px">${p.rfid}</span></td>
+                <td style="font-weight:500">${p.name}</td>
+                <td style="font-family:var(--mono);font-size:13px;font-weight:700">${p.qty}</td>
+                <td style="font-family:var(--mono);font-size:12px;color:var(--accent)">${fc.daily}/day</td>
+                <td style="font-family:var(--mono);font-size:12px;color:var(--warn)">${fc.total} units</td>
+                <td><span class="trend-${fc.trend}">${fc.trend==='up'?'↑ RISING':fc.trend==='down'?'↓ FALLING':'→ STABLE'}</span></td>
+                <td>
+                  <span style="font-family:var(--mono);font-size:11px;color:#a78bfa">${fc.confidence}%</span>
+                  <span class="conf-bar-wrap"><span class="conf-bar" style="width:${fc.confidence}%"></span></span>
+                </td>
+                <td style="font-family:var(--mono);font-size:12px;color:${rec.daysOfStock<=3?'var(--danger)':rec.daysOfStock<=14?'var(--warn)':'var(--text)'}">${rec.daysOfStock===99?'∞':rec.daysOfStock+'d'}</td>
+                <td style="font-family:var(--mono);font-size:12px;color:var(--accent3)">${rec.reorderQty}</td>
+                <td><span class="rec-badge rec-${rec.level}">${rec.label}</span></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }, 700);
+}
+
+// ── Single product detailed report ───────────────────────────────
+function buildSingleReport(p, fc, rec) {
+  const hist = demandHistory[p.rfid] || [];
+  const last7 = hist.slice(-7);
+  const avgLast7 = last7.length ? (last7.reduce((s,d)=>s+d.qty,0)/last7.length).toFixed(1) : '—';
+
+  return `
+    <div class="ai-summary-row">
+      <div class="ai-stat purple">
+        <div class="ai-stat-label">Forecast Confidence</div>
+        <div class="ai-stat-val">${fc.confidence}%</div>
+        <div class="ai-stat-sub">LR · ES · MA ensemble</div>
+      </div>
+      <div class="ai-stat cyan">
+        <div class="ai-stat-label">Predicted Daily Demand</div>
+        <div class="ai-stat-val">${fc.daily}</div>
+        <div class="ai-stat-sub">units per day</div>
+      </div>
+      <div class="ai-stat warn">
+        <div class="ai-stat-label">7-Day Forecast</div>
+        <div class="ai-stat-val">${fc.total}</div>
+        <div class="ai-stat-sub">units needed</div>
+      </div>
+      <div class="ai-stat ${rec.level==='ok'||rec.level==='watch'?'green':'warn'}">
+        <div class="ai-stat-label">Days of Stock Left</div>
+        <div class="ai-stat-val">${rec.daysOfStock===99?'∞':rec.daysOfStock}</div>
+        <div class="ai-stat-sub">at current demand</div>
+      </div>
+    </div>
+    ${buildSingleChart(p, fc, hist)}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;">MODEL DETAILS</div>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          ${[
+            ['Linear Regression slope', (fc.lr.slope>=0?'+':'')+fc.lr.slope.toFixed(3)+' units/day'],
+            ['R² Fit Score', (fc.lr.r2*100).toFixed(1)+'%'],
+            ['Exp. Smoothed (α=0.3)', fc.es.toFixed(1)+' units/day'],
+            ['7-Day Moving Avg', fc.ma.toFixed(1)+' units/day'],
+            ['Avg Demand (last 7d)', avgLast7+' units/day'],
+            ['History Points', hist.length+' observations'],
+          ].map(([k,v])=>`
+            <div style="display:flex;justify-content:space-between;font-size:12px;">
+              <span style="color:var(--muted);font-family:var(--mono);font-size:10px">${k}</span>
+              <span style="font-family:var(--mono);color:var(--accent);font-size:11px">${v}</span>
+            </div>`).join('')}
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid rgba(${rec.level==='urgent'?'255,59,92':rec.level==='reorder'?'255,183,0':rec.level==='watch'?'0,229,255':'57,255,110'},0.2);border-radius:8px;padding:16px;">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;">⚠ AI REORDER RECOMMENDATION</div>
+        <div style="margin-bottom:12px;"><span class="rec-badge rec-${rec.level}" style="font-size:11px;padding:5px 12px;">${rec.label}</span></div>
+        ${[
+          ['Current Stock',     p.qty+' units'],
+          ['Reorder Point',     p.reorder+' units'],
+          ['Safety Stock',      rec.safetyStock+' units'],
+          ['Suggested Reorder', rec.reorderQty+' units'],
+          ['Trend',             fc.trend==='up'?'↑ Demand rising':fc.trend==='down'?'↓ Demand falling':'→ Demand stable'],
+        ].map(([k,v])=>`
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;">
+            <span style="color:var(--muted);font-family:var(--mono);font-size:10px">${k}</span>
+            <span style="font-family:var(--mono);font-size:11px;color:var(--text)">${v}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// ── Sparkline chart for single product (SVG) ─────────────────────
+function buildSingleChart(p, fc, hist) {
+  const pts = hist.slice(-14);
+  if (pts.length < 2) return '';
+  const W=600, H=80, pad=10;
+  const maxY = Math.max(...pts.map(d=>d.qty), fc.daily*1.4) || 1;
+  const xStep = (W-pad*2)/(pts.length-1);
+  const yScale = (H-pad*2)/maxY;
+  const toX = i => pad + i*xStep;
+  const toY = v => H-pad - v*yScale;
+  const polyline = pts.map((d,i)=>`${toX(i).toFixed(1)},${toY(d.qty).toFixed(1)}`).join(' ');
+  const areaPath = `M${toX(0).toFixed(1)},${H-pad} ` + pts.map((d,i)=>`L${toX(i).toFixed(1)},${toY(d.qty).toFixed(1)}`).join(' ') + ` L${toX(pts.length-1).toFixed(1)},${H-pad} Z`;
+  const forecastY = toY(fc.daily).toFixed(1);
+
+  return `<div class="ai-chart-wrap">
+    <div class="ai-chart-title">${p.name} — 14-DAY DEMAND HISTORY + FORECAST LINE</div>
+    <svg class="ai-chart-svg" viewBox="0 0 ${W} ${H}" style="height:90px;">
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#a78bfa" stop-opacity="0.02"/>
+        </linearGradient>
+      </defs>
+      <path d="${areaPath}" fill="url(#areaGrad)"/>
+      <polyline points="${polyline}" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linejoin="round"/>
+      ${pts.map((d,i)=>`<circle cx="${toX(i).toFixed(1)}" cy="${toY(d.qty).toFixed(1)}" r="3" fill="#a78bfa"/>`).join('')}
+      <line x1="${pad}" y1="${forecastY}" x2="${W-pad}" y2="${forecastY}" stroke="#00e5ff" stroke-width="1.5" stroke-dasharray="5,4"/>
+      <text x="${W-pad+4}" y="${parseFloat(forecastY)+4}" font-family="monospace" font-size="9" fill="#00e5ff">FCST</text>
+    </svg>
+  </div>`;
+}
+
+// ── Bar chart for all-products view (top 12 by demand) ───────────
+function buildForecastChart(results) {
+  const top = results.slice(0,12);
+  const W=700, H=90, pad=10, barW=42, gap=8;
+  const maxVal = Math.max(...top.map(r=>r.fc.total)) || 1;
+  const toH = v => Math.round((v/maxVal)*(H-pad*2-14));
+  const colorOf = lvl => lvl==='urgent'?'#ff3b5c':lvl==='reorder'?'#ffb700':lvl==='watch'?'#00e5ff':'#39ff6e';
+
+  const bars = top.map((r,i) => {
+    const bh = toH(r.fc.total);
+    const bx = pad + i*(barW+gap);
+    const by = H-pad-14-bh;
+    const abbr = r.p.name.split(' ').map(w=>w[0]).join('').slice(0,3).toUpperCase();
+    return `
+      <rect x="${bx}" y="${by}" width="${barW}" height="${bh}" rx="3" fill="${colorOf(r.rec.level)}" opacity="0.8"/>
+      <text x="${bx+barW/2}" y="${H-pad-1}" text-anchor="middle" font-family="monospace" font-size="8" fill="#5a7a8a">${abbr}</text>
+      <text x="${bx+barW/2}" y="${by-3}" text-anchor="middle" font-family="monospace" font-size="8" fill="#e8edf2">${r.fc.total}</text>`;
+  }).join('');
+
+  return `<div class="ai-chart-wrap">
+    <div class="ai-chart-title">7-DAY DEMAND FORECAST BY PRODUCT (TOP 12) &nbsp;·&nbsp;
+      <span style="color:#ff3b5c">■ URGENT</span> &nbsp;
+      <span style="color:#ffb700">■ REORDER</span> &nbsp;
+      <span style="color:#00e5ff">■ WATCH</span> &nbsp;
+      <span style="color:#39ff6e">■ OK</span>
+    </div>
+    <svg class="ai-chart-svg" viewBox="0 0 ${W} ${H}" style="height:100px;">
+      ${bars}
+    </svg>
+  </div>`;
+}
+
+// ──────────────────────────────────────────────
+//  START
+// ──────────────────────────────────────────────
+seedHistory();
+populateAIDropdown();
+init();
+</script>
+</body>
+</html>
