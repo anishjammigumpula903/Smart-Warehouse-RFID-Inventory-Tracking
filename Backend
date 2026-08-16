@@ -1,0 +1,199 @@
+# Smart Warehouse RFID Inventory Tracking
+# Backend — Combined Database + API Code
+#
+# This document combines the three database/backend files into one place:
+# 1. database.py
+# 2. models.py
+# 3. main.py
+#
+# Copy each marked section into the corresponding file when creating the
+# professional repository structure.
+
+# ============================================================
+# FILE 1: backend/database/database.py
+# ============================================================
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+DATABASE_URL = "sqlite:///./warehouse.db"
+
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False}
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+Base = declarative_base()
+
+
+def get_db():
+    db = SessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# ============================================================
+# FILE 2: backend/database/models.py
+# ============================================================
+
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, Integer, String
+
+from .database import Base
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    product_id = Column(
+        String,
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
+    rfid_tag = Column(
+        String,
+        unique=True,
+        nullable=False,
+        index=True
+    )
+
+    product_name = Column(
+        String,
+        nullable=False
+    )
+
+    category = Column(
+        String,
+        nullable=False
+    )
+
+    quantity = Column(
+        Integer,
+        default=0
+    )
+
+    reorder_level = Column(
+        Integer,
+        default=10
+    )
+
+    location = Column(
+        String,
+        default="A1"
+    )
+
+    last_movement = Column(
+        DateTime,
+        nullable=True
+    )
+
+
+class RFIDEvent(Base):
+    __tablename__ = "rfid_events"
+
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
+
+    timestamp = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    rfid_tag = Column(
+        String,
+        nullable=False,
+        index=True
+    )
+
+    product_id = Column(
+        String,
+        nullable=False
+    )
+
+    action = Column(
+        String,
+        nullable=False
+    )
+
+    location = Column(
+        String,
+        nullable=False
+    )
+
+    quantity = Column(
+        Integer,
+        nullable=False
+    )
+
+    quantity_after = Column(
+        Integer,
+        nullable=False
+    )
+
+
+# ============================================================
+# FILE 3: backend/main.py
+# ============================================================
+
+from fastapi import FastAPI
+
+from backend.database.database import Base, engine
+
+# Import models so SQLAlchemy registers the tables before
+# create_all() is executed.
+from backend.database import models
+
+from backend.api.routes_rfid import router as rfid_router
+from backend.api.routes_inventory import router as inventory_router
+from backend.api.routes_analytics import router as analytics_router
+
+
+Base.metadata.create_all(bind=engine)
+
+
+app = FastAPI(
+    title="Smart Warehouse RFID API",
+    description=(
+        "Backend API for RFID-based warehouse "
+        "inventory tracking, analytics and AI."
+    ),
+    version="1.0.0",
+)
+
+
+app.include_router(rfid_router)
+app.include_router(inventory_router)
+app.include_router(analytics_router)
+
+
+@app.get("/")
+def root():
+    return {
+        "application": "Smart Warehouse RFID Inventory Tracking",
+        "version": "1.0.0",
+        "status": "online",
+    }
+
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy"
+    }
