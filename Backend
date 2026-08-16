@@ -1,27 +1,71 @@
-# Smart Warehouse RFID Inventory Tracking
-# Backend — Combined Database + API Code
+    # ============================================================
+# SMART WAREHOUSE RFID INVENTORY TRACKING
+# COMPLETE BACKEND - SINGLE FILE VERSION
+# ============================================================
 #
-# This document combines the three database/backend files into one place:
-# 1. database.py
-# 2. models.py
-# 3. main.py
+# This file combines:
 #
-# Copy each marked section into the corresponding file when creating the
-# professional repository structure.
+# 1. Database configuration
+# 2. Database models
+# 3. Pydantic schemas
+# 4. RFID service
+# 5. Inventory service
+# 6. Alert service
+# 7. RFID API routes
+# 8. Inventory API routes
+# 9. Analytics API routes
+# 10. FastAPI application
+#
+# Run:
+#     pip install fastapi uvicorn sqlalchemy pydantic
+#
+# Start:
+#     uvicorn backend_all:app --reload
+#
+# Swagger:
+#     http://127.0.0.1:8000/docs
+#
+# ============================================================
+
 
 # ============================================================
-# FILE 1: backend/database/database.py
+# SECTION 1 — IMPORTS
 # ============================================================
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from datetime import datetime
+from typing import Literal
+
+from fastapi import FastAPI, APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field, ConfigDict
+from sqlalchemy import (
+    create_engine,
+    Column,
+    DateTime,
+    Integer,
+    String,
+)
+from sqlalchemy.orm import (
+    declarative_base,
+    sessionmaker,
+    Session,
+)
+
+
+# ============================================================
+# SECTION 2 — DATABASE CONFIGURATION
+# Original: backend/database/database.py
+# ============================================================
 
 DATABASE_URL = "sqlite:///./warehouse.db"
 
+
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False}
+    connect_args={
+        "check_same_thread": False
+    }
 )
+
 
 SessionLocal = sessionmaker(
     autocommit=False,
@@ -29,33 +73,39 @@ SessionLocal = sessionmaker(
     bind=engine
 )
 
+
 Base = declarative_base()
 
 
 def get_db():
+    """
+    Create a database session for an API request.
+    """
+
     db = SessionLocal()
 
     try:
         yield db
+
     finally:
         db.close()
 
 
 # ============================================================
-# FILE 2: backend/database/models.py
+# SECTION 3 — DATABASE MODELS
+# Original: backend/database/models.py
 # ============================================================
-
-from datetime import datetime
-
-from sqlalchemy import Column, DateTime, Integer, String
-
-from .database import Base
 
 
 class Product(Base):
+
     __tablename__ = "products"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(
+        Integer,
+        primary_key=True,
+        index=True
+    )
 
     product_id = Column(
         String,
@@ -103,6 +153,7 @@ class Product(Base):
 
 
 class RFIDEvent(Base):
+
     __tablename__ = "rfid_events"
 
     id = Column(
@@ -149,51 +200,951 @@ class RFIDEvent(Base):
 
 
 # ============================================================
-# FILE 3: backend/main.py
+# SECTION 4 — PYDANTIC RFID SCHEMAS
+# Original: backend/schemas/rfid.py
 # ============================================================
 
-from fastapi import FastAPI
 
-from backend.database.database import Base, engine
+class RFIDScanRequest(BaseModel):
 
-# Import models so SQLAlchemy registers the tables before
-# create_all() is executed.
-from backend.database import models
+    rfid_tag: str = Field(
+        ...,
+        min_length=1
+    )
 
-from backend.api.routes_rfid import router as rfid_router
-from backend.api.routes_inventory import router as inventory_router
-from backend.api.routes_analytics import router as analytics_router
+    location: str
+
+    action: Literal[
+        "IN",
+        "OUT"
+    ]
+
+    quantity: int = Field(
+        ...,
+        gt=0
+    )
 
 
-Base.metadata.create_all(bind=engine)
+class RFIDScanResponse(BaseModel):
+
+    success: bool
+
+    rfid_tag: str
+
+    product_id: str
+
+    product_name: str
+
+    action: str
+
+    location: str
+
+    quantity: int
+
+    quantity_after: int
+
+    timestamp: datetime
 
 
-app = FastAPI(
-    title="Smart Warehouse RFID API",
-    description=(
-        "Backend API for RFID-based warehouse "
-        "inventory tracking, analytics and AI."
-    ),
-    version="1.0.0",
+# ============================================================
+# SECTION 5 — PYDANTIC INVENTORY SCHEMA
+# Original: backend/schemas/inventory.py
+# ============================================================
+
+
+class InventoryResponse(BaseModel):
+
+    product_id: str
+
+    rfid_tag: str
+
+    product_name: str
+
+    category: str
+
+    quantity: int
+
+    reorder_level: int
+
+    location: str
+
+    stock_status: str
+
+    last_movement: datetime | None
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+
+# ============================================================
+# SECTION 6 — RFID SERVICE
+# Original: backend/services/rfid_service.py
+# ============================================================
+
+
+VALID_LOCATIONS = {
+
+    "A1": "Receiving Bay",
+
+    "B2": "Storage East",
+
+    "C3": "Storage West",
+
+    "D4": "Dispatch Bay",
+
+    "E5": "Cold Storage",
+
+}
+
+
+def process_rfid_scan(
+    db: Session,
+    rfid_tag: str,
+    location: str,
+    action: str,
+    quantity: int,
+):
+    """
+    Process an RFID scan.
+
+    Steps:
+    1. Validate warehouse location.
+    2. Find product using RFID tag.
+    3. Validate IN/OUT operation.
+    4. Update inventory.
+    5. Record RFID event.
+    6. Commit transaction.
+    """
+
+    # --------------------------------------------------------
+    # Validate warehouse location
+    # --------------------------------------------------------
+
+    if location not in VALID_LOCATIONS:
+
+        raise ValueError(
+            f"Invalid warehouse location: {location}"
+        )
+
+
+    # --------------------------------------------------------
+    # Find product
+    # --------------------------------------------------------
+
+    product = (
+        db.query(Product)
+        .filter(
+            Product.rfid_tag == rfid_tag
+        )
+        .first()
+    )
+
+
+    if product is None:
+
+        raise ValueError(
+            f"RFID tag not found: {rfid_tag}"
+        )
+
+
+    # --------------------------------------------------------
+    # Get current inventory
+    # --------------------------------------------------------
+
+    current_quantity = product.quantity
+
+
+    # --------------------------------------------------------
+    # Process IN transaction
+    # --------------------------------------------------------
+
+    if action == "IN":
+
+        new_quantity = (
+            current_quantity + quantity
+        )
+
+
+    # --------------------------------------------------------
+    # Process OUT transaction
+    # --------------------------------------------------------
+
+    elif action == "OUT":
+
+        if quantity > current_quantity:
+
+            raise ValueError(
+                "Insufficient inventory "
+                "for OUT transaction"
+            )
+
+        new_quantity = (
+            current_quantity - quantity
+        )
+
+
+    # --------------------------------------------------------
+    # Invalid action
+    # --------------------------------------------------------
+
+    else:
+
+        raise ValueError(
+            "Action must be IN or OUT"
+        )
+
+
+    # --------------------------------------------------------
+    # Timestamp
+    # --------------------------------------------------------
+
+    now = datetime.utcnow()
+
+
+    # --------------------------------------------------------
+    # Update product
+    # --------------------------------------------------------
+
+    product.quantity = new_quantity
+
+    product.location = location
+
+    product.last_movement = now
+
+
+    # --------------------------------------------------------
+    # Create RFID event
+    # --------------------------------------------------------
+
+    event = RFIDEvent(
+
+        timestamp=now,
+
+        rfid_tag=rfid_tag,
+
+        product_id=product.product_id,
+
+        action=action,
+
+        location=location,
+
+        quantity=quantity,
+
+        quantity_after=new_quantity,
+
+    )
+
+
+    # --------------------------------------------------------
+    # Save event
+    # --------------------------------------------------------
+
+    db.add(event)
+
+    db.commit()
+
+    db.refresh(event)
+
+
+    return product, event
+
+
+# ============================================================
+# SECTION 7 — INVENTORY SERVICE
+# Original: backend/services/inventory_service.py
+# ============================================================
+
+
+def get_all_products(
+    db: Session
+):
+
+    return (
+
+        db.query(Product)
+
+        .order_by(
+            Product.product_id
+        )
+
+        .all()
+
+    )
+
+
+def get_product_by_rfid(
+    db: Session,
+    rfid_tag: str
+):
+
+    return (
+
+        db.query(Product)
+
+        .filter(
+            Product.rfid_tag == rfid_tag
+        )
+
+        .first()
+
+    )
+
+
+def get_stock_status(
+    product: Product
+) -> str:
+
+    # --------------------------------------------------------
+    # No stock
+    # --------------------------------------------------------
+
+    if product.quantity == 0:
+
+        return "URGENT"
+
+
+    # --------------------------------------------------------
+    # At or below reorder level
+    # --------------------------------------------------------
+
+    if (
+        product.quantity
+        <= product.reorder_level
+    ):
+
+        return "REORDER"
+
+
+    # --------------------------------------------------------
+    # Approaching reorder level
+    # --------------------------------------------------------
+
+    if (
+        product.quantity
+        <= product.reorder_level * 2
+    ):
+
+        return "WATCH"
+
+
+    # --------------------------------------------------------
+    # Healthy inventory
+    # --------------------------------------------------------
+
+    return "OK"
+
+
+def get_inventory_with_status(
+    db: Session
+):
+
+    products = get_all_products(db)
+
+    result = []
+
+
+    for product in products:
+
+        result.append({
+
+            "product_id":
+                product.product_id,
+
+            "rfid_tag":
+                product.rfid_tag,
+
+            "product_name":
+                product.product_name,
+
+            "category":
+                product.category,
+
+            "quantity":
+                product.quantity,
+
+            "reorder_level":
+                product.reorder_level,
+
+            "location":
+                product.location,
+
+            "stock_status":
+                get_stock_status(product),
+
+            "last_movement":
+                product.last_movement,
+
+        })
+
+
+    return result
+
+
+# ============================================================
+# SECTION 8 — ALERT SERVICE
+# Original: backend/services/alert_service.py
+# ============================================================
+
+
+def get_inventory_alerts(
+    db: Session
+):
+
+    inventory = (
+        get_inventory_with_status(db)
+    )
+
+
+    alerts = [
+
+        product
+
+        for product in inventory
+
+        if product["stock_status"]
+        in {
+            "URGENT",
+            "REORDER"
+        }
+
+    ]
+
+
+    return alerts
+
+
+# ============================================================
+# SECTION 9 — RFID API ROUTES
+# Original: backend/api/routes_rfid.py
+# ============================================================
+
+
+rfid_router = APIRouter(
+
+    prefix="/rfid",
+
+    tags=[
+        "RFID"
+    ]
+
 )
 
 
-app.include_router(rfid_router)
-app.include_router(inventory_router)
-app.include_router(analytics_router)
+@rfid_router.post(
+
+    "/scan",
+
+    response_model=RFIDScanResponse
+
+)
+def scan_rfid(
+
+    request: RFIDScanRequest,
+
+    db: Session = Depends(get_db)
+
+):
+
+    try:
+
+        product, event = (
+            process_rfid_scan(
+
+                db=db,
+
+                rfid_tag=
+                    request.rfid_tag,
+
+                location=
+                    request.location,
+
+                action=
+                    request.action,
+
+                quantity=
+                    request.quantity,
+
+            )
+        )
+
+
+        return {
+
+            "success":
+                True,
+
+            "rfid_tag":
+                product.rfid_tag,
+
+            "product_id":
+                product.product_id,
+
+            "product_name":
+                product.product_name,
+
+            "action":
+                event.action,
+
+            "location":
+                event.location,
+
+            "quantity":
+                event.quantity,
+
+            "quantity_after":
+                event.quantity_after,
+
+            "timestamp":
+                event.timestamp,
+
+        }
+
+
+    except ValueError as error:
+
+        raise HTTPException(
+
+            status_code=400,
+
+            detail=str(error)
+
+        )
+
+
+@rfid_router.get(
+    "/events"
+)
+def get_rfid_events(
+
+    db: Session = Depends(get_db)
+
+):
+
+    events = (
+
+        db.query(RFIDEvent)
+
+        .order_by(
+
+            RFIDEvent.timestamp.desc()
+
+        )
+
+        .all()
+
+    )
+
+
+    return events
+
+
+# ============================================================
+# SECTION 10 — INVENTORY API ROUTES
+# Original: backend/api/routes_inventory.py
+# ============================================================
+
+
+inventory_router = APIRouter(
+
+    prefix="/inventory",
+
+    tags=[
+        "Inventory"
+    ]
+
+)
+
+
+@inventory_router.get("/")
+def get_inventory(
+
+    db: Session = Depends(get_db)
+
+):
+
+    return (
+        get_inventory_with_status(
+            db
+        )
+    )
+
+
+@inventory_router.get(
+    "/alerts"
+)
+def inventory_alerts(
+
+    db: Session = Depends(get_db)
+
+):
+
+    alerts = (
+        get_inventory_alerts(db)
+    )
+
+
+    return {
+
+        "count":
+            len(alerts),
+
+        "alerts":
+            alerts,
+
+    }
+
+
+@inventory_router.get(
+    "/{rfid_tag}"
+)
+def get_inventory_product(
+
+    rfid_tag: str,
+
+    db: Session = Depends(get_db)
+
+):
+
+    product = (
+        get_product_by_rfid(
+
+            db,
+
+            rfid_tag
+
+        )
+    )
+
+
+    if product is None:
+
+        raise HTTPException(
+
+            status_code=404,
+
+            detail=
+                "RFID tag not found"
+
+        )
+
+
+    return {
+
+        "product_id":
+            product.product_id,
+
+        "rfid_tag":
+            product.rfid_tag,
+
+        "product_name":
+            product.product_name,
+
+        "category":
+            product.category,
+
+        "quantity":
+            product.quantity,
+
+        "reorder_level":
+            product.reorder_level,
+
+        "location":
+            product.location,
+
+        "stock_status":
+            get_stock_status(product),
+
+        "last_movement":
+            product.last_movement,
+
+    }
+
+
+# ============================================================
+# SECTION 11 — ANALYTICS API ROUTES
+# Original: backend/api/routes_analytics.py
+# ============================================================
+
+
+analytics_router = APIRouter(
+
+    prefix="/analytics",
+
+    tags=[
+        "Analytics"
+    ]
+
+)
+
+
+@analytics_router.get(
+    "/kpis"
+)
+def get_kpis(
+
+    db: Session = Depends(get_db)
+
+):
+
+    products = (
+
+        db.query(Product)
+
+        .all()
+
+    )
+
+
+    events = (
+
+        db.query(RFIDEvent)
+
+        .all()
+
+    )
+
+
+    # --------------------------------------------------------
+    # Total SKUs
+    # --------------------------------------------------------
+
+    total_skus = len(
+        products
+    )
+
+
+    # --------------------------------------------------------
+    # Total stock
+    # --------------------------------------------------------
+
+    total_stock = sum(
+
+        product.quantity
+
+        for product in products
+
+    )
+
+
+    # --------------------------------------------------------
+    # Active alerts
+    # --------------------------------------------------------
+
+    active_alerts = sum(
+
+        1
+
+        for product in products
+
+        if (
+            product.quantity
+            <= product.reorder_level
+        )
+
+    )
+
+
+    # --------------------------------------------------------
+    # RFID scan events
+    # --------------------------------------------------------
+
+    scan_events = len(
+        events
+    )
+
+
+    return {
+
+        "total_skus":
+            total_skus,
+
+        "total_stock":
+            total_stock,
+
+        "active_alerts":
+            active_alerts,
+
+        "scan_events":
+            scan_events,
+
+    }
+
+
+@analytics_router.get(
+    "/movements"
+)
+def get_movement_statistics(
+
+    db: Session = Depends(get_db)
+
+):
+
+    events = (
+
+        db.query(RFIDEvent)
+
+        .all()
+
+    )
+
+
+    total_events = len(
+        events
+    )
+
+
+    in_events = sum(
+
+        1
+
+        for event in events
+
+        if event.action == "IN"
+
+    )
+
+
+    out_events = sum(
+
+        1
+
+        for event in events
+
+        if event.action == "OUT"
+
+    )
+
+
+    return {
+
+        "total_events":
+            total_events,
+
+        "in_events":
+            in_events,
+
+        "out_events":
+            out_events,
+
+    }
+
+
+# ============================================================
+# SECTION 12 — FASTAPI APPLICATION
+# Original: backend/main.py
+# ============================================================
+
+
+# Create database tables.
+#
+# Because Product and RFIDEvent were defined above,
+# SQLAlchemy already knows about the models.
+
+Base.metadata.create_all(
+    bind=engine
+)
+
+
+app = FastAPI(
+
+    title=
+        "Smart Warehouse RFID API",
+
+    description=(
+        "Backend API for RFID-based "
+        "warehouse inventory tracking, "
+        "analytics and AI."
+    ),
+
+    version=
+        "1.0.0",
+
+)
+
+
+# ============================================================
+# Register API routers
+# ============================================================
+
+
+app.include_router(
+    rfid_router
+)
+
+
+app.include_router(
+    inventory_router
+)
+
+
+app.include_router(
+    analytics_router
+)
+
+
+# ============================================================
+# ROOT ENDPOINT
+# ============================================================
 
 
 @app.get("/")
 def root():
+
     return {
-        "application": "Smart Warehouse RFID Inventory Tracking",
-        "version": "1.0.0",
-        "status": "online",
+
+        "application":
+            "Smart Warehouse RFID "
+            "Inventory Tracking",
+
+        "version":
+            "1.0.0",
+
+        "status":
+            "online",
+
     }
 
 
-@app.get("/health")
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
+
+@app.get(
+    "/health"
+)
 def health_check():
+
     return {
-        "status": "healthy"
+
+        "status":
+            "healthy"
+
     }
+
+
+# ============================================================
+# ENDPOINT SUMMARY
+# ============================================================
+#
+# GET /
+# GET /health
+#
+# RFID:
+# POST /rfid/scan
+# GET  /rfid/events
+#
+# Inventory:
+# GET /inventory/
+# GET /inventory/alerts
+# GET /inventory/{rfid_tag}
+#
+# Analytics:
+# GET /analytics/kpis
+# GET /analytics/movements
+#
+# Swagger:
+# http://127.0.0.1:8000/docs
+#
+# ============================================================
